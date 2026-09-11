@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Калькулятор гібридної сонячної електростанції</title>
+    <style>
+        :root {
+            --primary: #2e7d32;
+            --primary-light: #e8f5e9;
+            --accent: #ff8f00;
+            --bg: #f4f6f8;
+            --card-bg: #ffffff;
+            --text: #333333;
+            --border: #ddd;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        }
+        h1 {
+            color: var(--primary);
+            text-align: center;
+            margin-bottom: 25px;
+            font-size: 24px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+        input, select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 14px 20px;
+            font-size: 18px;
+            font-weight: bold;
+            width: 100%;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background-color: #1b5e20;
+        }
+        .results {
+            margin-top: 30px;
+            display: none;
+            border-top: 2px solid var(--primary-light);
+            padding-top: 20px;
+        }
+        .result-card {
+            background: var(--primary-light);
+            border-left: 5px solid var(--primary);
+            padding: 15px 20px;
+            border-radius: 0 8px 8px 0;
+            margin-bottom: 15px;
+        }
+        .result-card h3 {
+            margin-top: 0;
+            color: var(--primary);
+        }
+        .schema-box {
+            background: #fff;
+            border: 2px dashed var(--primary);
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            text-align: center;
+        }
+        .schema-flex {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .schema-item {
+            background: #f9f9f9;
+            border: 1px solid var(--border);
+            padding: 15px;
+            border-radius: 8px;
+            flex: 1;
+            min-width: 200px;
+        }
+        .arrow {
+            font-size: 24px;
+            color: var(--accent);
+            font-weight: bold;
+        }
+        @media(max-width: 600px) {
+            .arrow { transform: rotate(90deg); }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>☀️ Калькулятор Гібридної СЕС для дому</h1>
+    
+    <div class="form-group">
+        <label for="consumption">Середньодобове споживання будинку (кВт·год на день):</label>
+        <input type="number" id="consumption" placeholder="Наприклад: 15" value="15" min="1">
+        <small style="color: #666;">В середньому український будинок споживає 10–25 кВт·год на добу.</small>
+    </div>
+
+    <div class="form-group">
+        <label for="backup_hours">Скільки годин автономії потрібно без сонця (резерв вночі/при блекауті):</label>
+        <select id="backup_hours">
+            <option value="4">4-6 годин (базовий вечірній запас)</option>
+            <option value="8" selected>8-10 годин (нічний час / стандарт)</option>
+            <option value="15">12-16 годин (довгі відключення)</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label for="budget_type">Бюджет та клас обладнання:</label>
+        <select id="budget_type">
+            <option value="optimal">Оптимальний / Народний вибір (Deye, Axioma)</option>
+            <option value="budget">Економ (EASUN, Anern)</option>
+            <option value="premium">Преміум (Huawei, Victron Energy)</option>
+        </select>
+    </div>
+
+    <button onclick="calculateSESS()">Розрахувати систему</button>
+
+    <div class="results" id="resultsBlock">
+        <h2>📊 Результати підбору обладнання</h2>
+        
+        <div class="result-card" id="inverterResult">
+            <!-- Інвертор -->
+        </div>
+
+        <div class="result-card" id="batteryResult">
+            <!-- Акумулятор -->
+        </div>
+
+        <div class="result-card" id="panelsResult">
+            <!-- Панелі -->
+        </div>
+
+        <div class="schema-box">
+            <h3>🧩 Проста схема підключення для розуміння</h3>
+            <p>Як це працює і з'єднується між собою у вашому домі:</p>
+            <div class="schema-flex" id="schemaVisual">
+                <!-- Схема генерується JS -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function calculateSESS() {
+    const dailyKwh = parseFloat(document.getElementById('consumption').value);
+    const backupHours = parseFloat(document.getElementById('backup_hours').value);
+    const budgetType = document.getElementById('budget_type').value;
+
+    if (!dailyKwh || dailyKwh <= 0) {
+        alert('Будь ласка, введіть коректне споживання.');
+        return;
+    }
+
+    // 1. Розрахунок потужності інвертора
+    // Пікове навантаження зазвичай в 1.5-2 рази вище середнього
+    let recommendedKwInverter = Math.max(3, Math.ceil((dailyKwh / 5) * 1.2)); 
+    if (recommendedKwInverter > 16) recommendedKwInverter = 16;
+    // Округлимо до стандартних номіналів: 3, 5, 6, 8, 10, 12, 15 кВт
+    const standardInverters = [3, 5, 6, 8, 10, 12, 15];
+    let inverterKw = standardInverters.find(v => v >= recommendedKwInverter) || 12;
+
+    let inverterModels = {
+        'optimal': inverterKw <= 6 ? `Deye SUN-${inverterKw}K-SG05LP1 (однофазний)` : `Deye SUN-${inverterKw}K-SG04LP3 / SG01HP3 (трифазний)`,
+        'budget': `Axioma Energy / EASUN ISolar SMG / PowMr ${inverterKw} кВт`,
+        'premium': inverterKw <= 6 ? `Huawei Sun2000-${inverterKw}KTL-L1 + Luna2000` : `Victron Energy MultiPlus-II / Fronius Hybrid`
+    };
+
+    // 2. Розрахунок ємності акумулятора (з урахуванням глибині розряду LiFePO4 ~80%)
+    let requiredBatteryKwh = Math.round((dailyKwh * (backupHours / 24)) / 0.8);
+    if (requiredBatteryKwh < 5) requiredBatteryKwh = 5;
+
+    let batteryModels = {
+        'optimal': `LiFePO4 акумулятор блочного типу (наприклад, Pylontech US5000 / Deye RW-M6.1) ємністю ~${requiredBatteryKwh} кВт·год`,
+        'budget': `Настінний/стоєчний LiFePO4 OEM-акумулятор (напр. Dyness або на елементах EVE) ємністю ~${requiredBatteryKwh} кВт·год`,
+        'premium': `Huawei LUNA2000 або високоякісний модуль Victron/Pylontech ємністю ~${requiredBatteryKwh} кВт·год`
+    };
+
+    // 3. Розрахунок сонячних панелей (щоб покрити денне споживання + зарядку АКБ)
+    let neededPanelKw = Math.ceil(dailyKwh * 0.7); // приблизно покриття днівки
+    if (neededPanelKw < 3) neededPanelKw = 3;
+    
+    // Потужність однієї сучасної панелі
+    const panelWatt = 580;
+    let panelCount = Math.ceil((neededPanelKw * 1000) / panelWatt);
+    // Зробимо кількість парною для зручності монтажу по стрінгах
+    if (panelCount % 2 !== 0) panelCount += 1;
+
+    let totalPanelPower = (panelCount * panelWatt) / 1000;
+
+    // Логіка з'єднання
+    let stringText = "";
+    if (panelCount <= 8) {
+        stringText = `Всі ${panelCount} панелі можна з'єднати в **один послідовний ланцюжок (стрінг)**, оскільки їх сумарна напруга ідеально лягає в діапазон інвертора.`;
+    } else {
+        let half = panelCount / 2;
+        stringText = `Краще поділити панелі на **2 рівні ланцюжки по ${half} штук** і підключити їх на два незалежні входи (MPPT 1 та MPPT 2) на інверторі. Це захистить систему від втрати потужності, якщо частину панелей затінить.`;
+    }
+
+    // Виведення результатів
+    document.getElementById('inverterResult').innerHTML = `
+        <h3>⚡ 1. Рекомендований інвертор: ${inverterKw} кВт</h3>
+        <p><b>Чому такий:</b> Така потужність дозволить одночасно ввімкнути пральну машину, бойлер, холодильник та насос без перевантаження.</p>
+        <p><b>Популярна модель (на ринку України):</b> ${inverterModels[budgetType]}</p>
+    `;
+
+    document.getElementById('batteryResult').innerHTML = `
+        <h3>🔋 2. Акумуляторна батарея (АКБ): ~${requiredBatteryKwh} кВт·год</h3>
+        <p><b>Чому така ємність:</b> Забезпечить вам ${backupHours} годин комфортного резервного живлення вночі або під час відключення світла.</p>
+        <p><b>Рекомендація:</b> Використовуйте сучасні літій-залізо-фосфатні (LiFePO4) акумулятори (термін служби понад 10 років).</p>
+        <p><b>Популярна модель:</b> ${batteryModels[budgetType]}</p>
+    `;
+
+    document.getElementById('panelsResult').innerHTML = `
+        <h3>☀️ 3. Сонячні панелі: ${totalPanelPower.toFixed(1)} кВт (${panelCount} шт. по ${panelWatt} Вт)</h3>
+        <p><b>Як з'єднати:</b> ${stringText}</p>
+        <p><b>Тип панелей:</b> Сучасні монокристалічні панелі технології N-Type (Trina Solar, JA Solar, Longi Solar) потужністю 580–610 Вт кожна.</p>
+    `;
+
+    // Візуальна схема
+    document.getElementById('schemaVisual').innerHTML = `
+        <div class="schema-item">
+            <strong>☀️ Сонячні панелі</strong><br>
+            ${panelCount} шт. (${totalPanelPower.toFixed(1)} кВт)<br>
+            <small>З'єднані дротівкою в стрінги та підключені до входу PV інвертора</small>
+        </div>
+        <div class="arrow">➔</div>
+        <div class="schema-item" style="border-color: var(--primary); background: var(--primary-light);">
+            <strong>⚡ Гібридний інвертор</strong><br>
+            ${inverterKw} кВт (${budgetType.toUpperCase()})<br>
+            <small>Мозок системи: керує енергією сонця, мережі та батарей</small>
+        </div>
+        <div class="arrow">➔</div>
+        <div class="schema-item">
+            <strong>🔋 Акумулятор</strong><br>
+            LiFePO4 (~${requiredBatteryKwh} кВт·год)<br>
+            <small>Накопичує надлишки сонячного світла та живить дім увечері</small>
+        </div>
+    `;
+
+    document.getElementById('resultsBlock').style.display = 'block';
+    document.getElementById('resultsBlock').scrollIntoView({ behavior: 'smooth' });
+}
+</script>
+
+</body>
+</html>
